@@ -6,35 +6,45 @@ This project is part of my hands-on learning journey as I transition into Data E
 
 ---
 
-## 🧠 Project Overview
+## Project Overview
 
 This project demonstrates how to:
 
-- Extract data from database and API to MinIO (object storage) as a data lake.
-  
-- Load the extracted data into a staging schema in warehouse database.
+- **Extract data** from a database and API sources.
 
-- Transform it into a final schema using DBT.
+- **Load this data** into MinIO (object storage) for a data lake, then into a staging schema in a warehouse database.
 
-- Orchestrate the entire ELT process with Apache Airflow (Celery Executor)
+- **Transform data** into a final schema using **DBT (Data Build Tool)**.
 
-- Setup DBT DAG, set variables/connections, and trigger downstream DAGs
+- **Orchestrate the entire process** with **Apache Airflow** (using the Celery Executor).
 
-- Setup Airflow remote logging and monitoring stack using Prometheus and Grafana
+- Implement Airflow features like **DBT DAG integration**, variable/connection management, and downstream DAG triggering.
 
-- Send alerts via Slack using Webhooks
+- Set up Airflow **remote logging** and a **monitoring stack** using Prometheus and Grafana.
+
+- Configure **Slack alerts** via webhooks for alerting.
     
 ---
 
-## 🔄 How the Pipeline Works
+## How the Pipeline Works
 
 ![elt-design]()
 
-- **Extract Task**: Pulls raw data from the source database and saves it as CSV files in MinIO.
+- **Extract Task**: Pulls raw data from the source database or API and saves it as CSV files in MinIO.
 
-- **Load Task**: Loads those CSV files from MinIO into the staging schema in the data warehouse.
+- **Load Task**: Reads the CSVs from MinIO and loads them into the staging schema of the data warehouse.
 
-- **Transform Task**: Runs DBT to transform staging data into final schema.
+- **Transform Task**: Runs DBT to transform the staging data into clean, final tables.
+
+All of this is managed by an Airflow DAG, which:
+
+- Runs the tasks in the correct order
+
+- Sends task logs to MinIO
+
+- Sends metrics to Prometheus and Grafana for monitoring
+
+- Sends Slack alerts if any task fails
 
 ---
 
@@ -162,40 +172,46 @@ GRAFANA_PASSWORD=grafana
 ```
 
 ### 5. Setup Airflow Variable and Connections
-You can update the Airflow variable and connections or just using these template:
+Airflow needs some variables and connections to run the pipeline properly. You can:
 
-- link to airlow connection and variable config
+- Set them manually through the Airflow UI
 
-For the Slack notifier (for alerting) you can following these steps:
-  - **Setup Steps**:
+- Or use the preconfigured template:
+  - [Airflow variable and connections config]()
 
-    - **Log in** to your existing Slack account or **create** a new one if you don’t have it yet.
-    - **Create a workspace** (if you don’t already have one) and create a dedicated Slack channel where you want to receive alerts.
-    - **Create a Slack App**:
+For the Slack notifier you can following these steps:
+  - **Log in** to your existing Slack account or **create** a new one if you don’t have it yet.
+  - **Create a workspace** (if you don’t already have one) and create a dedicated Slack channel where you want to receive alerts.
+  - **Create a Slack App**:
 
-       - Go to https://api.slack.com/apps
-       - Click **Create New App**
-       - Choose **From scratch**
-       - Enter your app name and select the workspace you just created or want to use
-       - Click **Create App**
+    - Go to https://api.slack.com/apps
+    - Click **Create New App**
+    - Choose **From scratch**
+    - Enter your app name and select the workspace you just created or want to use
+    - Click **Create App**
+
+  - **Set up an Incoming Webhook** for your app:
+
+    - In the app settings, find and click on **Incoming Webhooks**
+    - **Enable Incoming Webhooks** if it’s not already enabled
+    - Click **Add New Webhook to Workspace**
+    - Select the Slack channel you want alerts to go to and authorize
   
-    4. **Set up an Incoming Webhook** for your app:
+  - **Copy the generated Webhook URL**
 
-       - In the app settings, find and click on **Incoming Webhooks**
-       - **Enable Incoming Webhooks** if it’s not already enabled
-       - Click **Add New Webhook to Workspace**
-       - Select the Slack channel you want alerts to go to and authorize
-  
-    5. **Copy the generated Webhook URL**
-
-       <img src="https://github.com/Rico-febrian/flight-bookings-elt-pipeline-with-airflow/blob/main/pict/slack-webhook.png" alt="webhook-url" width="600"/>
+    <img src="https://github.com/Rico-febrian/flight-bookings-elt-pipeline-with-airflow/blob/main/pict/slack-webhook.png" alt="webhook-url" width="600"/>
 
 
 ### 5. Build and Start Services
 
-After define all those `.env` and connection and variables you can start the service by manually run the docker compose of each service or just run the `setup.sh`.
+After setting up the `.env` files, Airflow connections, and variables, you can start all the services.
 
-make sure the script is executable by run this command
+You can either:
+
+- Run each `docker-compose` file manually, or
+- Just use the provided `setup.sh` script to spin up everything at once.
+
+Make the script executable:
 ```bash
 chmod 700 setup.sh
 ```
@@ -203,7 +219,17 @@ then, run the script
 ```bash
 ./setup.sh
 ```
-The script will remove all volumes and run monitoring and main services, also import the Airflow variable and connections every time you run the script.
+What this script does:
+
+- **Cleans up** any previous Docker volumes
+
+- Starts the **main services** (Airflow, DBs, MinIO, Redis)
+
+- Starts the **monitoring stack** (Prometheus + Grafana)
+
+- Automatically imports all required **Airflow variables and connections**
+  
+You can re-run this script anytime to reset and restart everything from scratch.
 
 ### 5. Open Airflow UI
 
@@ -228,40 +254,48 @@ Log in with the default credentials:
   - `bikes_store_warehouse`
 
 > [!Note]
-> You don’t need to manually run bikes_store_warehouse DAG. It will be triggered automatically after the staging pipeline completes.
+> You don’t need to manually run `bikes_store_warehouse` DAG. It will be triggered automatically after the staging pipeline completes.
 
 ---
 
 ## DAG Behavior (What to Expect)
 
-- In `bikes_store_staging`:
+This pipeline runs in **two DAGs**, managed by Airflow:
 
-  - Extract tasks run in parallel
-  - Load tasks run sequentially (after extraction)
-  - Once loading is done, it **triggers** `bikes_store_warehouse`
+- `bikes_store_staging` DAG:
+
+  - Extract tasks **run in parallel**
+  - Load tasks **run sequentially** after extract task finished
+  - After load task is completed, it **automatically triggers** the next DAG: `bikes_store_warehouse`
 
     <img src="" alt="dag-result" width="800"/>
 
-- In `bikes_store_warehouse`:
+- In `bikes_store_warehouse` DAG:
+  This DAG handles the **transformation process using DBT**. It includes **three main tasks**:
 
-  - There are three tasks:
+  - `check_is_warehouse_init`
+     Decides which transformation path to run, based on the Airflow variable `BIKES_STORE_WAREHOUSE_INIT`
 
-    - `check_is_warehouse_init`
-      The purpose of this task is to determine which downstream will be run, whether `init_warehouse` or `warehouse`. This is determined by the value of `BIKES_STORE_WAREHOUSE_INIT` variables. If the value is **True** then the `init_warehouse` task group will be run. But if the value is **False** then the `warehouse` task group will be run.
+    - If it's set to **True**, the pipeline runs `init_warehouse` task
+    - If it's **False**, it runs `warehouse` task
 
-    - `init_warehouse`
-      This task will run the DBT transformation models including the seed (dim_date) and run the DBT test 
+  - `init_warehouse`
+    Runs the full DBT transformation, including:
 
-      <img src="" alt="dag-result" width="800"/>
+    - Seeding the `dim_date` table
+    - Running all models
+    - Running DBT tests to validate results
+      
+    <img src="" alt="init-warehouse-result" width="800"/>
 
-    - `warehouse`
-       This task will run the DBT transformation models EXCLUDE the seed (dim_date) and run the DBT test
+  - `init_warehouse`
+    Runs only the regular DBT models (no seed) and DBT tests
 
-      <img src="" alt="dag-result" width="800"/>
+    <img src="" alt="init-warehouse-result" width="800"/>
 
 ---
 
-## ✅ Verify the Results
+## Verify the Results
 
 Since incremental mode and catchup are disabled (set to `False`), the pipeline will runs the **full load** process. So, you can just verify the result by open the database.
 
@@ -271,22 +305,24 @@ Since incremental mode and catchup are disabled (set to `False`), the pipeline w
 - Navigate to the selected bucket.
 - You should see the extracted data files in CSV format.
 
-  <img src="https://github.com/Rico-febrian/flight-bookings-elt-pipeline-with-dbt-airflow/blob/main/picts/minio-result.png" alt="minio-result" width="600"/>
+  <img src="" alt="minio-result" width="600"/>
 
 ### Staging and Transformed data in Data Warehouse
 
 To verify the data in your data warehouse:
 
-- Open your preferred database client (e.g., DBeaver).
+- Open your database client (e.g., DBeaver).
 - Connect to your warehouse database.
-- Check the following:
+- Look for these schemas:
 
-  - ✅ Raw data from the source should be available under the **staging** schema.
-  - ✅ Transformed data should be available under the **final** schema.
+  - bikes_store_staging → contains raw, loaded data
+  - warehouse → contains clean, transformed tables from DBT
+
+You can explore the tables, run simple queries, and check the row counts to confirm everything worked as expected.
         
 ---
 
-## 📬 Feedback & Articles
+## Feedback & Articles
 
 **Thank you for exploring this project!** If you have any feedback, feel free to share, I'm always open to suggestions.
 
