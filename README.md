@@ -28,7 +28,7 @@ This project demonstrates how to:
 
 ## How the Pipeline Works
 
-![elt-design]()
+![elt-design](https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/blob/main/picts/bikes-store-elt-design.png)
 
 - **Extract Task**: Pulls raw data from the source database or API and saves it as CSV files in MinIO.
 
@@ -76,7 +76,7 @@ elt-airflow-project/
 │   └── helper/                      # Helper functions (callbacks, utils, etc.)
 ├── dataset/
 │   ├── source/                      # Source database init SQL
-│   └── warehouse/                   # Warehouse schema init SQL (staging and final schema)
+│   └── warehouse/                   # Warehouse schema init SQL (staging and warehouse schema)
 ├── monitoring-logging/              # Setup to run monitoring stack
 ├── Dockerfile                       # Custom Airflow image
 ├── docker-compose.yml               # Docker Compose config
@@ -108,7 +108,7 @@ python3 fernet.py
 
 **Copy the output key** to the `.env` file.
 
-### 3. Create `.env` File for Main Service (Run Airflow, MinIO and PostgreSQL)
+### 3. Create `.env` File for Main Service (Airflow, MinIO and PostgreSQL)
 
 Use the following template and update with your actual configuration:
 
@@ -162,7 +162,7 @@ MINIO_CONS_PORT=9001
 LOGS_BUCKET=airflow-logs
 EXTRACTED_BUCKET=bikes-store
 ```
-### 4. Create `.env` File for Monitoring Service (Run Stasd-exporter, Grafana and Prometheus)
+### 4. Create `.env` File for Monitoring Service (Statsd, Grafana and Prometheus)
 Change directory to `monitoring-logging/` then create `.env` with these following template and update with your actual configuration:
 
 ```ini
@@ -177,7 +177,7 @@ Airflow needs some variables and connections to run the pipeline properly. You c
 - Set them manually through the Airflow UI
 
 - Or use the preconfigured template:
-  - [Airflow variable and connections config]()
+  - [Airflow variable and connections config](https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/tree/main/connection-variables)
 
 For the Slack notifier you can following these steps:
   - **Log in** to your existing Slack account or **create** a new one if you don’t have it yet.
@@ -242,7 +242,6 @@ Log in with the default credentials:
 (These are defined in the `airflow-init` service within your `docker-compose.yml`).
 
 ---
----
 
 ## ▶️ Run the DAG
 
@@ -268,30 +267,36 @@ This pipeline runs in **two DAGs**, managed by Airflow:
   - Load tasks **run sequentially** after extract task finished
   - After load task is completed, it **automatically triggers** the next DAG: `bikes_store_warehouse`
 
-    <img src="" alt="dag-result" width="800"/>
+    <img src="https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/blob/main/picts/staging-graph.png" alt="dag-result" width="800"/>
 
 - In `bikes_store_warehouse` DAG:
+  
   This DAG handles the **transformation process using DBT**. It includes **three main tasks**:
 
+  <img src="https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/blob/main/picts/warehouse-graph.png" alt="init-warehouse-result" width="800"/>
+
   - `check_is_warehouse_init`
+    
      Decides which transformation path to run, based on the Airflow variable `BIKES_STORE_WAREHOUSE_INIT`
 
     - If it's set to **True**, the pipeline runs `init_warehouse` task
     - If it's **False**, it runs `warehouse` task
 
   - `init_warehouse`
+    
     Runs the full DBT transformation, including:
 
     - Seeding the `dim_date` table
     - Running all models
     - Running DBT tests to validate results
-      
-    <img src="" alt="init-warehouse-result" width="800"/>
+
+    <img src="https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/blob/main/picts/init_warehouse_task.png" width="800"/>
 
   - `init_warehouse`
+    
     Runs only the regular DBT models (no seed) and DBT tests
 
-    <img src="" alt="init-warehouse-result" width="800"/>
+    <img src="https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/blob/main/picts/warehouse_task.png" alt="init-warehouse-result" width="800"/>
 
 ---
 
@@ -299,34 +304,44 @@ This pipeline runs in **two DAGs**, managed by Airflow:
 
 Since incremental mode and catchup are disabled (set to `False`), the pipeline will runs the **full load** process. So, you can just verify the result by open the database.
 
-### Extracted Data in MinIO Bucket
+- ### Extracted Data in MinIO Bucket
+    
+    - Log in to the MinIO console (eg. localhost:9000) using the username and password defined in your `.env` file.
+    
+    - Navigate to the selected bucket.
+    
+    - You should see the extracted data files in CSV format.
 
-- Log in to the MinIO console (eg. localhost:9000) using the username and password defined in your `.env` file.
-- Navigate to the selected bucket.
-- You should see the extracted data files in CSV format.
+      <img src="https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/blob/main/picts/minio_result.png" alt="minio-result" width="600"/>
 
-  <img src="" alt="minio-result" width="600"/>
+- ### Staging and Transformed data in Data Warehouse
 
-### Staging and Transformed data in Data Warehouse
+  To verify the data in your data warehouse:
 
-To verify the data in your data warehouse:
+  - Open your database client (e.g., DBeaver).
 
-- Open your database client (e.g., DBeaver).
-- Connect to your warehouse database.
-- Look for these schemas:
+  - Connect to your warehouse database.
 
-  - bikes_store_staging → contains raw, loaded data
-  - warehouse → contains clean, transformed tables from DBT
+  - Look for these schemas:
+      
+      - bikes_store_staging → contains raw, loaded data
+      
+      - warehouse → contains clean, transformed tables from DBT
 
-You can explore the tables, run simple queries, and check the row counts to confirm everything worked as expected.
+    You can explore the tables, run simple queries, and check the row counts to confirm everything worked as expected.
+
+
+- ### Monitoring Dashboard
+
+  You can also check the Grafana dashboard at http://localhost:3000 to view Airflow metrics for your DAG — like task duration, status, and more.
+
+  <img src="https://github.com/Rico-febrian/elt-pipeline-with-dbt-airflow-for-bikes-store-business/blob/main/picts/grafana_dashboard.png" alt="minio-result" width="600"/>
         
 ---
 
 ## Feedback & Articles
 
-**Thank you for exploring this project!** If you have any feedback, feel free to share, I'm always open to suggestions.
-
-Additionally, I write about my learning journey on Medium. You can check out my articles [here](https://medium.com/@ricofebrian731). Let’s also connect on [LinkedIn](https://www.linkedin.com/in/ricofebrian).
+**Thank you for exploring this project!** If you have any feedback, feel free to share, I'm always open to suggestions. Additionally, I write about my learning journey on Medium. You can check out my articles [here](https://medium.com/@ricofebrian731). Let’s also connect on [LinkedIn](https://www.linkedin.com/in/ricofebrian).
 
 ---
 
