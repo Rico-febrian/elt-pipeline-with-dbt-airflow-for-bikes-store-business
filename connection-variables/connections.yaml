@@ -1,0 +1,45 @@
+bikes-store-api:
+  conn_type: http
+  description: bikes store api
+  extra: ''
+  host: https://api-currency-five.vercel.app/api/currencydata
+  login: ''
+  password: null
+  port: null
+  schema: ''
+bikes-store-db:
+  conn_type: postgres
+  description: Connection to source db
+  extra: ''
+  host: bikes-store-db-src
+  login: postgres
+  password: postgres
+  port: 5432
+  schema: bikes-store
+s3-conn:
+  conn_type: aws
+  description: Connection to MinIO
+  extra: '{"endpoint_url": "minio:9000"}'
+  host: ''
+  login: minio
+  password: minio123
+  port: null
+  schema: ''
+slack_notifier:
+  conn_type: slack
+  description: Alerting
+  extra: '{"timeout": null}'
+  host: ''
+  login: ''
+  password: # Fill with your Slack incoming webhook url
+  port: null
+  schema: ''
+warehouse:
+  conn_type: postgres
+  description: Connection to warehouse db
+  extra: '{}'
+  host: bikes-store-db-dwh
+  login: postgres
+  password: postgres
+  port: 5432
+  schema: warehouse
